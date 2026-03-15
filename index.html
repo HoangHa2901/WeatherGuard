@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>WeatherGuard - Cảnh báo thời tiết & sinh tồn</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="logo">WeatherGuard</div>
+    <div class="header-subtitle">Cảnh báo thời tiết & sinh tồn</div>
+  </header>
+
+  <main class="main">
+    <section class="left-column">
+      <section class="card" id="location-card">
+        <h2>Vị trí & GPS</h2>
+        <p class="location-note">
+          Nhấn nút "LẤY VỊ TRÍ CỦA TÔI" để lấy vị trí hiện tại của bạn.
+        </p>
+        <div class="location-row">
+          <div>
+            <div class="label">Vị trí hiện tại</div>
+            <div class="value" id="location-text">Chưa lấy vị trí</div>
+            <div class="label" style="margin-top: 6px;">Tên địa điểm</div>
+            <div class="value" id="location-place">--</div>
+          </div>
+          <button id="get-location-btn" class="location-btn">Lấy vị trí của tôi</button>
+        </div>
+      </section>
+      <section class="card" id="current-weather-card">
+        <div class="weather-header">
+          <h2>Thời tiết hiện tại</h2>
+          <button id="toggle-daily-weather" class="toggle-weather-btn">Xem thời tiết trong ngày</button>
+        </div>
+        <div class="current-weather-grid">
+          <div>
+            <div class="label">Nhiệt độ</div>
+            <div class="value" id="temp-value">--</div>
+          </div>
+          <div>
+            <div class="label">Độ ẩm</div>
+            <div class="value" id="humidity-value">--</div>
+          </div>
+          <div>
+            <div class="label">Tốc độ gió</div>
+            <div class="value" id="wind-value">--</div>
+          </div>
+          <div>
+            <div class="label">Tổng quan</div>
+            <div class="value" id="summary-value">--</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="risk-card">
+        <div class="risk-header">
+          <h2>Mức độ rủi ro</h2>
+          <button id="risk-info-btn" class="info-btn" title="Xem cách tính">ℹ️</button>
+        </div>
+        <div id="risk-level" class="risk-level-box">
+          <span class="risk-box-score">--</span>
+          <span class="risk-box-label"> </span>
+        </div>
+        <p id="risk-desc" class="risk-desc">
+          Hệ thống sẽ tính điểm rủi ro dựa trên nhiệt độ, độ ẩm, lượng mưa và vận tốc gió.
+        </p>
+
+        <!-- Test Sliders -->
+        <div class="risk-test-sliders">
+          <h4>Điều chỉnh test</h4>
+          <div class="slider-row">
+            <label>Nhiệt độ: <span id="test-temp-val">25</span>°C</label>
+            <input type="range" id="test-temp" min="-10" max="45" value="25" step="1">
+          </div>
+          <div class="slider-row">
+            <label>Độ ẩm: <span id="test-rh-val">50</span>%</label>
+            <input type="range" id="test-rh" min="0" max="100" value="50" step="1">
+          </div>
+          <div class="slider-row">
+            <label>Sức gió: <span id="test-wind-val">5</span> m/s</label>
+            <input type="range" id="test-wind" min="0" max="30" value="5" step="1">
+          </div>
+          <div class="slider-row">
+            <label>Lượng mưa: <span id="test-precip-val">0</span> mm</label>
+            <input type="range" id="test-precip" min="0" max="50" value="0" step="1">
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="forecast-card">
+        <h2>Dự báo 7 ngày tới</h2>
+        <div id="forecast-grid" class="forecast-grid">
+        </div>
+      </section>
+    </section>
+
+    <section class="right-column">
+      <section class="card map-card">
+        <div class="map-card-header">
+          <h2>Bản đồ Windy</h2>
+          <button id="expand-map-btn" class="map-expand-btn">Phóng to bản đồ</button>
+        </div>
+        <p class="map-note">
+          Bản đồ hiển thị lớp gió/thời tiết.
+        </p>
+        <div id="windy-map" class="map-container"></div>
+      </section>
+
+      <!-- Family Location Sharing -->
+      <section class="card" id="family-card">
+        <div class="card-header">
+          <h2>👪 Vị trí người thân</h2>
+          <button id="add-family-btn" class="btn-primary">+ Thêm người thân</button>
+        </div>
+        
+        <div class="share-location-section">
+          <h3>Chia sẻ vị trí của bạn</h3>
+          <div class="user-id-section">
+            <label>User ID của bạn: <span id="current-user-id">Đang tải...</span> <button id="copy-user-id" class="btn-small">📋 Copy</button></label>
+          </div>
+          <div class="toggle-share">
+            <label class="switch">
+              <input type="checkbox" id="share-location-toggle">
+              <span class="slider"></span>
+            </label>
+            <span>Chia sẻ vị trí real-time</span>
+          </div>
+          <p class="share-note">Vị trí của bạn sẽ được cập nhật mỗi 30 giây</p>
+        </div>
+
+        <div class="family-list" id="family-list">
+          <h3>Danh sách người thân</h3>
+          <div class="family-item" id="no-family-message">
+            <p>Chưa có người thân nào được thêm</p>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <button id="sos-button" class="sos-button">
+    Gửi tín hiệu S.O.S
+  </button>
+
+  <div id="map-overlay" class="map-overlay hidden">
+    <div class="map-container" id="expanded-map"></div>
+  </div>
+
+  <div id="sos-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Tín hiệu khẩn cấp</h2>
+      <p>
+        Hệ thống sẽ đánh dấu bạn là đang cần trợ giúp và hiển thị thông tin này
+        trên màn hình. Vì chỉ dùng HTML/CSS/JS thuần nên chưa gửi SMS/Email thực.
+      </p>
+      <p id="sos-status" class="sos-status"></p>
+      <button id="close-modal" class="btn">Đã hiểu</button>
+    </div>
+  </div>
+
+  <!-- SOS Confirmation Modal -->
+  <div id="sos-confirm-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Xác nhận gửi tín hiệu khẩn cấp</h3>
+      <p id="sos-confirm-message">
+        Bạn đang nằm trong vùng <span id="risk-level-text">an toàn</span>, bạn có chắc chắn muốn <strong>Gửi tín hiệu S.O.S</strong> ?
+      </p>
+      <div class="modal-buttons">
+        <button id="cancel-sos" class="btn-secondary">Hủy</button>
+        <button id="confirm-sos" class="btn-primary">Gửi tín hiệu S.O.S</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="risk-modal" class="modal hidden">
+    <div class="modal-content risk-modal-content">
+      <h2>📊 Thang đo mức độ rủi ro</h2>
+      
+      <div class="risk-scale">
+        <div class="risk-level-item safe">
+          <span class="level-badge">0-19</span>
+          <span class="level-name">An toàn</span>
+          <span class="level-desc">Thời tiết ổn định, không có rủi ro đáng lo ngại</span>
+        </div>
+        <div class="risk-level-item caution">
+          <span class="level-badge">20-39</span>
+          <span class="level-name">Chú ý</span>
+          <span class="level-desc">Thời tiết không thuận lợi, cần theo dõi tình hình</span>
+        </div>
+        <div class="risk-level-item warning">
+          <span class="level-badge">40-59</span>
+          <span class="level-name">Cảnh báo</span>
+          <span class="level-desc">Thời tiết xấu, cần cẩn trọng khi hoạt động ngoài trời</span>
+        </div>
+        <div class="risk-level-item danger">
+          <span class="level-badge">60+</span>
+          <span class="level-name">Nguy hiểm</span>
+          <span class="level-desc">Thời tiết nguy hiểm, cần hạn chế ra ngoài và có biện pháp bảo vệ</span>
+        </div>
+      </div>
+
+      <h3>🧮 Cách tính điểm</h3>
+      <table class="risk-calc-table">
+        <thead>
+          <tr>
+            <th>Yếu tố</th>
+            <th>Điều kiện</th>
+            <th>Điểm</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="5"><strong>Nhiệt độ</strong></td>
+            <td>≥ 40°C</td>
+            <td>+30</td>
+          </tr>
+          <tr>
+            <td>≥ 35°C</td>
+            <td>+20</td>
+          </tr>
+          <tr>
+            <td>≥ 30°C</td>
+            <td>+10</td>
+          </tr>
+          <tr>
+            <td>≤ 0°C</td>
+            <td>+15</td>
+          </tr>
+          <tr>
+            <td>≤ -5°C</td>
+            <td>+25</td>
+          </tr>
+          <tr>
+            <td rowspan="3"><strong>Gió</strong></td>
+            <td>≥ 20 m/s</td>
+            <td>+20</td>
+          </tr>
+          <tr>
+            <td>≥ 15 m/s</td>
+            <td>+15</td>
+          </tr>
+          <tr>
+            <td>≥ 10 m/s</td>
+            <td>+10</td>
+          </tr>
+          <tr>
+            <td rowspan="3"><strong>Mưa</strong></td>
+            <td>≥ 20mm</td>
+            <td>+25</td>
+          </tr>
+          <tr>
+            <td>≥ 10mm</td>
+            <td>+15</td>
+          </tr>
+          <tr>
+            <td>≥ 5mm</td>
+            <td>+10</td>
+          </tr>
+          <tr>
+            <td rowspan="2"><strong>Độ ẩm</strong></td>
+            <td>≥ 90%</td>
+            <td>+10</td>
+          </tr>
+          <tr>
+            <td>≥ 80%</td>
+            <td>+5</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <button id="close-risk-modal" class="btn">Đã hiểu</button>
+    </div>
+  </div>
+
+  <!-- Add Family Member Modal -->
+  <div id="add-family-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Thêm người thân</h3>
+      <form id="add-family-form">
+        <div class="form-group">
+          <label for="family-user-id">User ID của người thân:</label>
+          <input type="text" id="family-user-id" required placeholder="Nhập User ID để thêm người thân">
+          <small class="form-hint">Nhờ người thân cung cấp User ID của họ và nhập vào đây</small>
+        </div>
+        <div class="form-group">
+          <label for="family-name">Tên hiển thị (không bắt buộc):</label>
+          <input type="text" id="family-name" placeholder="Ví dụ: Bố, Mẹ, Anh...">
+        </div>
+        <div class="modal-buttons">
+          <button type="button" id="cancel-add-family" class="btn-secondary">Hủy</button>
+          <button type="submit" class="btn-primary">Thêm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics-compat.js"></script>
+
+  <script src="app.js"></script>
+</body>
+</html>
