@@ -276,6 +276,39 @@ function loadFamilyMembers() {
   if (stored) {
     familyMembers = JSON.parse(stored);
   }
+  
+  // Lấy danh sách người thân từ Firebase
+  const myUserId = getCurrentUserId();
+  database.ref(`users/${myUserId}/familyMembers`).on('value', (snapshot) => {
+    const firebaseMembers = snapshot.val() || {};
+    const firebaseMemberList = Object.keys(firebaseMembers).map(id => ({
+      id: id,
+      name: firebaseMembers[id].displayName || id,
+      displayName: firebaseMembers[id].displayName || '',
+      addedAt: firebaseMembers[id].addedAt || Date.now(),
+      isOnline: false,
+      lastSeen: null,
+      currentLocation: null
+    }));
+    
+    // Gộp danh sách từ localStorage và Firebase
+    const mergedMembers = [...familyMembers];
+    
+    // Thêm các thành viên từ Firebase chưa có trong localStorage
+    firebaseMemberList.forEach(firebaseMember => {
+      if (!mergedMembers.find(m => m.id === firebaseMember.id)) {
+        mergedMembers.push(firebaseMember);
+      }
+    });
+    
+    // Cập nhật danh sách
+    familyMembers = mergedMembers;
+    saveFamilyMembers();
+    renderFamilyList();
+    
+    // Lắng nghe vị trí của tất cả người thân
+    listenToFamilyLocations();
+  });
 }
 
 function saveFamilyMembers() {
@@ -329,6 +362,33 @@ function handleAddFamilyMember(e) {
     addedAt: newMember.addedAt
   }).then(() => {
     console.log("✅ Đã lưu thông tin người thân lên Firebase");
+    
+    // Tự động thêm mình vào danh sách người thân của người kia
+    const myUserId = getCurrentUserId();
+    const myProfile = {
+      displayName: "Bạn", // Mặc định là "Bạn"
+      addedBy: myUserId,
+      addedAt: Date.now()
+    };
+    
+    // Lấy thông tin profile của mình để gửi cho người kia
+    database.ref(`users/${myUserId}/profile`).once('value')
+      .then((snapshot) => {
+        const myData = snapshot.val();
+        if (myData && myData.displayName) {
+          myProfile.displayName = myData.displayName;
+        }
+        
+        // Thêm mình vào danh sách người thân của người kia
+        return database.ref(`users/${familyUserId}/familyMembers/${myUserId}`).set(myProfile);
+      })
+      .then(() => {
+        console.log("✅ Đã tự động thêm bạn vào danh sách người thân của người kia");
+      })
+      .catch((error) => {
+        console.error("❌ Lỗi tự động thêm bạn vào danh sách người thân:", error);
+      });
+      
   }).catch((error) => {
     console.error("❌ Lỗi lưu thông tin người thân:", error);
   });
@@ -342,7 +402,13 @@ function handleAddFamilyMember(e) {
   document.getElementById("add-family-modal").classList.add("hidden");
   document.getElementById("add-family-form").reset();
   
-  alert(`Đã thêm người thân với User ID: ${familyUserId}`);
+  alert(`Đã thêm người thân với User ID: ${familyUserId}\n\nBạn cũng đã được tự động thêm vào danh sách người thân của họ!`);
+}
+
+function listenToFamilyLocations() {
+  familyMembers.forEach(member => {
+    listenToSingleFamilyMember(member.id);
+  });
 }
 
 function listenToSingleFamilyMember(memberId) {
@@ -386,24 +452,161 @@ function renderFamilyList() {
       new Date(member.lastSeen).toLocaleString('vi-VN') : 'Chưa từng online';
     
     html += `
-      <div class="family-item">
+      <div class="family-item" data-member-id="${member.id}" data-display-name="${displayName}">
         <div class="family-item-info">
           <div class="family-item-name">${displayName}</div>
           <div class="family-item-details">ID: ${member.id}</div>
           <div class="family-item-lastseen">Lần cuối: ${lastSeenText}</div>
         </div>
-        <div class="family-item-status">
-          <div class="status-indicator ${statusClass}"></div>
-          <span class="status-text">${statusText}</span>
+        <div class="family-item-actions">
+          <div class="family-item-status">
+            <div class="status-indicator ${statusClass}"></div>
+            <span class="status-text">${statusText}</span>
+          </div>
+          <button class="delete-family-btn" onclick="deleteFamilyMember('${member.id}', '${displayName}')" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 16px; transition: all 0.2s ease; margin-left: 8px;">🗑️</button>
         </div>
       </div>
     `;
   });
   
   familyList.innerHTML = html;
+  
+  // Thêm event listener cho context menu
+  const familyItems = familyList.querySelectorAll('.family-item');
+  familyItems.forEach(item => {
+    item.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      const memberId = item.dataset.memberId;
+      const displayName = item.dataset.displayName;
+      showFamilyContextMenu(event, memberId, displayName);
+    });
+  });
 }
 
-function getRelationText(relation) {
+function showFamilyContextMenu(event, memberId, displayName) {
+  console.log("showFamilyContextMenu được gọi:", { memberId, displayName });
+  
+  // Ngăn context menu mặc định
+  event.preventDefault();
+  event.stopPropagation();
+  
+  // Xóa context menu cũ nếu có
+  const existingMenu = document.getElementById('family-context-menu');
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+  
+  // Tạo context menu
+  const menu = document.createElement('div');
+  menu.id = 'family-context-menu';
+  menu.className = 'context-menu';
+  menu.style.cssText = `
+    position: fixed;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 150px;
+    padding: 4px 0;
+  `;
+  
+  menu.innerHTML = `
+    <div class="context-menu-item" style="padding: 8px 16px; cursor: pointer; color: #374151; font-size: 14px;" onmouseover="this.style.background='#f3f4f6'; this.style.color='#dc2626';" onmouseout="this.style.background='white'; this.style.color='#374151';" onclick="deleteFamilyMember('${memberId}', '${displayName}')">
+      🗑️ Xóa người thân
+    </div>
+  `;
+  
+  // Thêm vào body
+  document.body.appendChild(menu);
+  console.log("Context menu đã được thêm vào DOM");
+  
+  // Vị trí menu
+  const x = event.pageX || event.clientX + window.scrollX;
+  const y = event.pageY || event.clientY + window.scrollY;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  console.log("Vị trí menu:", { x, y });
+  
+  // Đóng menu khi click ra ngoài
+  setTimeout(() => {
+    document.addEventListener('click', hideFamilyContextMenu);
+  }, 100);
+}
+
+// Đưa hàm vào global scope
+window.showFamilyContextMenu = showFamilyContextMenu;
+window.deleteFamilyMember = deleteFamilyMember;
+window.hideFamilyContextMenu = hideFamilyContextMenu;
+
+// Test function
+window.testContextMenu = function() {
+  console.log("Test context menu");
+  const event = {
+    preventDefault: () => {},
+    stopPropagation: () => {},
+    pageX: 100,
+    pageY: 100
+  };
+  showFamilyContextMenu(event, 'test123', 'Test User');
+};
+
+console.log("Context menu functions loaded:", {
+  showFamilyContextMenu: !!window.showFamilyContextMenu,
+  deleteFamilyMember: !!window.deleteFamilyMember,
+  hideFamilyContextMenu: !!window.hideFamilyContextMenu
+});
+
+function hideFamilyContextMenu() {
+  const menu = document.getElementById('family-context-menu');
+  if (menu) {
+    menu.remove();
+  }
+  document.removeEventListener('click', hideFamilyContextMenu);
+}
+
+function deleteFamilyMember(memberId, displayName) {
+  // Đóng context menu
+  hideFamilyContextMenu();
+  
+  // Xác nhận xóa
+  const confirmed = confirm(`Bạn có chắc chắn muốn xóa "${displayName}" khỏi danh sách người thân?`);
+  
+  if (!confirmed) return;
+  
+  // Xóa khỏi danh sách local
+  familyMembers = familyMembers.filter(m => m.id !== memberId);
+  saveFamilyMembers();
+  
+  // Xóa khỏi Firebase
+  const myUserId = getCurrentUserId();
+  database.ref(`users/${myUserId}/familyMembers/${memberId}`).remove()
+    .then(() => {
+      console.log("✅ Đã xóa người thân khỏi Firebase");
+      
+      // Xóa mình khỏi danh sách của người đó (tùy chọn)
+      database.ref(`users/${memberId}/familyMembers/${myUserId}`).remove()
+        .then(() => {
+          console.log("✅ Đã xóa mình khỏi danh sách của người thân");
+        })
+        .catch((error) => {
+          console.error("❌ Lỗi xóa mình khỏi danh sách của người thân:", error);
+        });
+    })
+    .catch((error) => {
+      console.error("❌ Lỗi xóa người thân khỏi Firebase:", error);
+    });
+  
+  // Render lại danh sách
+  renderFamilyList();
+  
+  // Dừng lắng nghe vị trí của người đã xóa
+  database.ref(`users/${memberId}/location`).off();
+  database.ref(`users/${memberId}/lastSeen`).off();
+  
+  alert(`Đã xóa "${displayName}" khỏi danh sách người thân`);
+}
+  function getRelationText(relation) {
   const relations = {
     parent: 'Bố/Mẹ',
     child: 'Con cái',
